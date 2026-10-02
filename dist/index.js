@@ -6,8 +6,9 @@ var VITAL_PAIRS = [
   [["ess", "essence"], ["maxess", "maxessence", "max_ess"], "ess", "gold"],
   [["moves", "mv", "stamina", "end", "endurance"], ["maxmoves", "maxmv", "maxstamina", "maxend", "maxendurance"], "mv", "ok"]
 ];
+var gaugeId = (label) => `vitals.${label}`;
 function gaugesOf(data) {
-  if (!data || typeof data !== "object") return [];
+  if (!data || typeof data !== "object" || Array.isArray(data)) return [];
   const d = data;
   const num = (k) => {
     const v = Number(d[k]);
@@ -26,23 +27,37 @@ function gaugesOf(data) {
 var index_default = defineExtension({
   activate(ctx) {
     const mu = ctx.mu;
-    const apply = (data, sid) => {
-      for (const g of gaugesOf(data)) {
-        mu.widgets.show({ id: `vitals.${g.label}`, type: "gauge", label: g.label, value: g.value, max: g.max, color: g.color, dismissible: false, source: "vitals", order: g.order }, sid);
+    const shown = /* @__PURE__ */ new Map();
+    const apply = (sid, state) => {
+      const next = gaugesOf(state);
+      const keep = new Set(next.map((g) => g.label));
+      for (const g of shown.get(sid) ?? []) if (!keep.has(g.label)) mu.widgets.close(gaugeId(g.label), sid);
+      for (const g of next) {
+        mu.widgets.show({ id: gaugeId(g.label), type: "gauge", label: g.label, value: g.value, max: g.max, color: g.color, dismissible: false, source: ctx.id, order: g.order }, sid);
+      }
+      if (next.length) shown.set(sid, next);
+      else shown.delete(sid);
+    };
+    ctx.subscriptions.push(mu.sessions.each((s) => {
+      const off = mu.gmcp.watch("Char.Vitals", (state) => apply(s.id, state), { sid: s.id });
+      return () => {
+        off();
+        shown.delete(s.id);
+      };
+    }));
+    const api = {
+      pairs: VITAL_PAIRS,
+      gauges: (sid) => {
+        const s = sid ?? mu.sessions.active()?.id;
+        return s ? (shown.get(s) ?? []).map((g) => ({ ...g })) : [];
       }
     };
-    mu.gmcp.on("Char", (data, { sid, pkg }) => {
-      if (pkg.toLowerCase() === "char.vitals") apply(data, sid);
-    });
-    for (const s of mu.sessions.list()) {
-      const d = mu.gmcp.state("Char.Vitals", s.id);
-      if (d) apply(d, s.id);
-    }
-    return { pairs: VITAL_PAIRS };
+    return api;
   }
 });
 export {
   VITAL_PAIRS,
   index_default as default,
+  gaugeId,
   gaugesOf
 };

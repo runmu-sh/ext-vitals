@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Char.Vitals",
+  "description": "An object of numbers (or numeric strings). Partial updates merge into the session's state.",
+  "type": "object",
+  "additionalProperties": { "type": ["number", "string", "null"] }
+}
